@@ -1,8 +1,8 @@
 # myInterpolator
 
-MyInterpolator fills voids in images from surrounding pixels using an approximation of the inverse distance weighting (IDW) technique along sets of parallel paths of arbitrary directions. For a detailed description of the algorithm please refer to the following paper:
+MyInterpolator fills voids in images from surrounding pixels using an approximation of the inverse distance weighting (IDW) technique along sets of parallel paths of arbitrary directions. For a detailed description of the algorithm please refer to the following open access paper:
 
-(citation will be added after publication)
+Frommholz, D.: *IMAGE INTERPOLATION ON THE CPU AND GPU USING LINE RUN  SEQUENCES*, ISPRS Ann. Photogramm. Remote Sens. Spatial Inf. Sci.,  V-2-2022, 53–60, https://doi.org/10.5194/isprs-annals-V-2-2022-53-2022,  2022.    
 
 ## 1. License
 
@@ -18,7 +18,7 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 [GNU General Public License](https://www.gnu.org/licenses/) for more details.
 
-If you wish to use the code of this software for a proprietary application or are interested in the GPU (OpenCL) implementation, please contact the author directly under the address mentioned in [this document](linkToPaper).
+If you wish to use the code of this software for a proprietary application or are interested in the GPU (OpenCL) implementation, please contact the author directly under the address mentioned in [the paper above](https://doi.org/10.5194/isprs-annals-V-2-2022-53-2022).
 
 ## 2. Build instructions
 
@@ -105,8 +105,6 @@ MyInterpolator accepts [TIFF](https://en.wikipedia.org/wiki/TIFF) images up to 3
     `myInterpolator.exe --bgnd 3 0 0 0 --dir 256 holes_big.tif holes_big_ip256.tif`
 
     ![Image](./doc/readme/holes_big_ip256.jpg)
-
-
 
 
 
