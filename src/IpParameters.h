@@ -77,14 +77,6 @@ struct CIpParameters {
 
 
     /**
-     * The maximum image samples to be proces sed by one kernel instance.
-     * Smaller values may help to avoid GPU timeouts at the cost of a
-     * higher invocation overhead.
-     */
-    data::pos_type m_clMaxSamplesPerKernelInstance;
-
-
-    /**
      * True if contour oversampling compensation is disabled, i.e, when
      * true the plain IDW formula will be applied which leads to 
      * oversampling of close-by pixels by multiple paths.

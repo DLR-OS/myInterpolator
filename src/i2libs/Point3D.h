@@ -173,7 +173,7 @@ namespace data {
         /**
          * Operator+ adds a 3-space point to this one by adding its components.
          *
-         * @param f_summand2 the 3d point to be added
+         * @param f_summand the 3d point to be added
          * @return the sum of the two points     
          */
         _CPoint3D operator+(const _CPoint3D& f_summand) const {
@@ -466,7 +466,7 @@ namespace data {
          * Cross computes the cross product of this vector with
          * another one.
          *     
-         * @param f_vec the vector to compute the cross product with
+         * @param f_b the vector to compute the cross product with
          * @return the cross product of this vector and f_vec (*this x f_vec)
          */
         _CPoint3D cross(const _CPoint3D& f_b) const {

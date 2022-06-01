@@ -154,7 +154,7 @@ void image::CInterpolator2DOpenMP::sweepArbDirectionReplay(
     const uint64_t f_nrOfChannels
 ) {
 
-    // acttual start pixel index, must start at f_skipRuns=1 on 
+    // actual start pixel index, must start at f_skipRuns=1 on 
     // secondary sweeps to avoid overlaps
     const uint64_t spIndex=f_spIndex+f_skipRuns;
 
@@ -162,19 +162,30 @@ void image::CInterpolator2DOpenMP::sweepArbDirectionReplay(
     // negative if we havn't seen a fgnd pixel yet
     float distanceToCurPixel=-1;
 
+    //
     // init Bresenham variables
+    //
+
+    // f_startPixels must be outside the image frame when
+    // f_skipRuns=1 (secondary sweeps) for the sucessor of the maximum
+    // valid run index from the primary sweep !!!                          
     data::CPoint2DInt linePos(f_startPixels_p[spIndex]);
 
     // current run
     // we skip the first spIndex runs (only if f_skipRuns is 1
     // for the secondary sweeps)
+    // this may end up outside the range of valid runs from the
+    // primary sweep by 1 on secondary sweeps, but since in this
+    // case - as stated above - we'll be outside the image frame
+    // no harm will be done
     const data::CPoint2DInt* runIt=f_pathRuns_p+f_skipRuns*spIndex;
 
     // the length of the current run
     data::pos_type runLength=runIt->m_j;
 
     // initialize image pointers
-    const data::pos_type pixelOffset=(linePos.m_j*f_width+linePos.m_i)*f_nrOfChannels;
+    const data::pos_type pixelOffset=(linePos.m_j*f_width+linePos.m_i)*
+    f_nrOfChannels;
 
     // current input image position (channel #0)
     const float* inImagePtr_p=f_inImage_p+pixelOffset;
@@ -484,6 +495,11 @@ f_idwSmoothness, const std::vector<data::CPoint2DInt>& f_pathRuns, const
 data::pos_type f_runCount, std::vector<data::CPoint2DInt>& f_startPixels, 
 bool f_forward) {
 
+    // set the start position at the runCount index to something 
+    // outside the image as a stop mark or the run pointer inside
+    // sweepArbDirectionReplay() may become invalid            
+    f_startPixels[f_runCount].setCoords(-1, -1);
+
     // start path cost aggregation from top/bottom border ?
     if ((f_sweepMode & SWEEP_STARTS_TOP_ROW) || (f_sweepMode & 
     SWEEP_STARTS_BOTTOM_ROW)) {
@@ -491,6 +507,8 @@ bool f_forward) {
         if (f_forward) {            
 
             // precompute start pixels
+            // start at run #0 since we offset the actual start run for the
+            // secondary sweep inside sweepArbDirectionReplay()
             #pragma omp parallel for
             for (data::pos_type runNo=0; runNo<f_runCount; ++runNo) { 
                 f_startPixels[runNo].setCoords(f_pathRuns[runNo].m_i, 
@@ -498,8 +516,9 @@ bool f_forward) {
                 getHeight()-1);
             }
 
-            // start with first line run since run #0 has been set
-            // already during primary sweep, enable run skipping 
+            // start with zero-th line run since the actual start run
+            // will be computed inside sweepArbDirectionReplay() to skip
+            // those pixels touched by the primary sweep, enable run skipping
             #pragma omp parallel for schedule(dynamic)
             for (data::pos_type runNo=0; runNo<f_runCount; ++runNo) { 
                 sweepArbDirectionReplay(m_disableOC ? 0 : m_dirCount, runNo, 

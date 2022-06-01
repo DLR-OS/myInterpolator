@@ -194,7 +194,7 @@ namespace common {
              * @param f_nr the number string that is to be converted
              * @param f_error_p holds true if there was a conversion error, 
              * and in this case the result is undefined
-             * @param base the base that shall be used if the number does
+             * @param f_base the base that shall be used if the number does
              * not contain a base identifier itself
              * @return the integer number that is contained in f_nr
              */
@@ -309,7 +309,7 @@ namespace common {
              * RemoveLeadTrailSpaces removes leading and trailing spaces from
              * the string f_s.
              *
-             * @param f_f the string to be cleaned from leading and trailing 
+             * @param f_s the string to be cleaned from leading and trailing 
              * spaces
              */
             static void removeLeadTrailSpaces(std::string& f_s) {
