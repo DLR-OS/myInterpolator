@@ -149,7 +149,7 @@ namespace common {
              * the current year, month and/or day in local time.
              *
              * @param f_year the year to get the day of year for 
-             * @param f_monthe the month to get the day of year for [1..12]
+             * @param f_month the month to get the day of year for [1..12]
              * @param f_day the day to get the day of year for [1..31]
              * @return the current day (.first) of the current year
              * (.second)

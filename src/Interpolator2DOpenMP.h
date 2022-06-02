@@ -31,7 +31,7 @@ namespace image {
 
 
     /**
-     * CInterpolator2DOpenMP interpolates images using gap-less 
+     * CInterpolator2DOpenMP interpolates images in-place using gap-less 
      * Bresenham sweeps. Mutithreading is via OpenMP, however, code
      * is organized so an OpenCL version can be derived straighforwardly.
      *
@@ -46,7 +46,6 @@ namespace image {
              * The constructor.
              * 
              * @param f_inImage the input image to be interpolated
-             * @param f_outImage the interpolated output image
              * @param f_weightImage the image containing the aggregated
              * weights per hole pixel (must have been initialized to the
              * minimum value supported by the pixel data type)
@@ -59,11 +58,11 @@ namespace image {
              * and use the plain IDW formula
              * @param f_progress_p the progress indicator
              */
-            CInterpolator2DOpenMP( CFloatImage& f_inImage, CFloatImage&
-            f_outImage, CFloatImage& f_weightImage, const std::vector<
-            float>& f_bgnd, const data::pos_type f_dirCount, const float 
-            f_idwSmoothness, const float f_angularOffset, const bool 
-            f_disableOC, common::CProgress* f_progress_p=0);
+            CInterpolator2DOpenMP( CFloatImage& f_inImage, CFloatImage& 
+            f_weightImage, const std::vector<float>& f_bgnd, const data::
+            pos_type f_dirCount, const float f_idwSmoothness, const float 
+            f_angularOffset, const bool f_disableOC, common::CProgress* 
+            f_progress_p=0);
 
 
             /**
@@ -72,10 +71,10 @@ namespace image {
              *        
              * @param f_ppFilterSize the kernel size for postprocessing
              * (negative coordinates=disable)
-             * @param f_pointStats the number of foreground, copied 
+             * @param f_pointStats_p the number of foreground, copied 
              * background and  interpolated background pixels in 
              * .m_x, .m_y and .m_z respectively 
-             * @param f_timingStats the runtime of initialization, interpolation,
+             * @param f_timingStats_p the runtime of initialization, interpolation,
              * normalization, and filtering respectively
              */
             void interpolate(const data::CPoint2DInt& f_ppFilterSize, 
@@ -139,12 +138,6 @@ namespace image {
              * The input image to be interpolated.
              */
             CFloatImage& m_inImage;
-
-
-            /**
-             * The interpolated output image.
-             */
-            CFloatImage& m_outImage;
 
 
             /**
@@ -224,8 +217,8 @@ namespace image {
             f_length, std::vector<data::CPoint2DInt>& f_runs);
 
             /**
-             * SweepArbDirectionReplay performs inverse distance waiting
-             * along a line run sequence.
+             * SweepArbDirectionReplay performs inverse distance weighting
+             * in-place along a line run sequence.
              *
              * @param f_dirCount the direction count
              * @param f_spIndex the start point index
@@ -247,10 +240,9 @@ namespace image {
              * @param f_skipRuns 0=do not initially skip f_spIndex line runs 
              * (primary sweeps=, 1=initially skip f_spIndex line runs 
              * (secondary sweeps) before performing IDW along the paths
-             * @param f_inImage_p the input image
-             * @param f_weigthImage_p the image storing the IDWs
-             * @param f_outImage_p the partially interpolated output
-             * image
+             * @param f_inImage_p the input image, will also hold the 
+             * interpolation result
+             * @param f_weightImage_p the image storing the IDWs
              * @param f_width the common width of the images
              * @param f_height the common height of the images
              * @param f_nrOfChannels the common channel count of the images
@@ -261,9 +253,8 @@ namespace image {
             const data::CPoint2DInt& f_prefDirOnlyStep, const float 
             f_distanceInc, const float f_idwSmoothness, const data::
             CPoint2DInt* f_pathRuns_p, const data::pos_type f_skipRuns,
-            const float* f_inImage_p, float* f_weightImage_p, float* 
-            f_outImage_p, const uint64_t f_width, const uint64_t 
-            f_height, const uint64_t f_nrOfChannels);
+            float* f_inImage_p, float* f_weightImage_p, const uint64_t 
+            f_width, const uint64_t f_height, const uint64_t f_nrOfChannels);
 
 
             /**
@@ -334,12 +325,13 @@ namespace image {
 
             
             /**
-             * InitWeightImage initializes the weight bitmap which is used
-             * to normalized the aggregated intensities after interpolation
-             * to preserve the average image intensity. Valid (existing) 
-             * pixels will bet set to a negative value.
+             * PrepareAggregation initializes the input and weight bitmaps 
+             * which are used aggregate and normalize the weighted intensities 
+             * during interpolation (to preserve the average image intensity).
+             * Valid (existing) pixels will bet set to a negative value inside
+             * the weight image and to zero inside the input image.
              */
-            void initWeightImage();
+            void prepareAggregation();
 
 
             /**

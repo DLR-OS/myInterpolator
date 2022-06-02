@@ -18,6 +18,23 @@
 
 /*
  * myInterpolator - sample program performing hole interpolation
+ * 
+ * This version optimizes the memory footprint of the original multi-path 
+ * interpolation algorithm from 
+ *
+ * https://doi.org/10.5194/isprs-annals-V-2-2022-53-2022. 
+ *  
+ * by getting rid of the separate output bitmap. Voids are filled directly 
+ * inside the in-memory input bitmap which therefore must be capable of 
+ * holding the weighted intensity sum for each pixel, i.e., the pixel data 
+ * type must be fp32+. Also, the nodata areas inside the input image must
+ * be initiazed to zero to prepare for the aggregation process.
+ * 
+ * For memory-efficient postprocessing, the smoothing step needs to be 
+ * run per-channel though using the weight bitmap as a temporary target for the 
+ * horizontal stage of the separable Gaussian. To still be able to identify 
+ * pixel that need postprocessing, all non-nodata pixels will be set to a 
+ * specific value inside the weight image once.
  *
  * @author Dirk "jtk" Frommholz
  * @date December 23, 2020
@@ -47,8 +64,8 @@
  */
 void printUsage(const char* f_programName_p, bool f_headerOnly) {
 
-    std::cout << f_programName_p << " - My interpolation utility" << 
-    std::endl;
+    std::cout << f_programName_p << " - My interpolation utility (in-place " 
+    "optimization)" << std::endl;
     std::cout << "Created by Dirk 'jtk' Frommholz, DLR OS-SEC Berlin-"
     "Adlershof" <<  std::endl;
     std::cout << "This is free software with absolutely no warranty, you "
@@ -269,18 +286,15 @@ f_ipParameters) {
 
 
 /**
- * SetupImages loads the input image and sets up the output and weight 
- * images.
+ * SetupImages loads the input image and sets up the weight image.
  *
  * @param f_ipParameters the interpolation parameter record providing the 
  * image URIs
  * @param f_inputImage the input image
- * @param f_outputImage the output image
  * @param f_weightImage the weight image
  */
 bool setupImages(CIpParameters& f_ipParameters, image::CFloatImage&
-f_inputImage, image::CFloatImage& f_outImage, image::CFloatImage& 
-f_weightImage) {
+f_inputImage, image::CFloatImage& f_weightImage) {
 
     // load input image
     try {
@@ -291,10 +305,7 @@ f_weightImage) {
         return false;
     }
 
-    // create output and weight image to have the same properties as
-    // the input bitmap
-    f_outImage.create(f_inputImage.getWidth(), f_inputImage.getHeight(), 
-    f_inputImage.getNrOfChannels());
+    // create weight image to have the same properties as the input bitmap
     f_weightImage.create(f_inputImage.getWidth(), f_inputImage.getHeight(), 
     f_inputImage.getNrOfChannels());
 
@@ -419,8 +430,8 @@ int main(int f_argc, char* f_argv_p[]) {
         parseParameters(f_argc, f_argv_p, ipParameters);
 
         // load, create images
-        image::CFloatImage inImage, outImage, weightImage;
-        setupImages(ipParameters, inImage, outImage, weightImage);
+        image::CFloatImage inImage, weightImage;
+        setupImages(ipParameters, inImage, weightImage);
  
         // print interpolation parameters
         ipParameters.print();        
@@ -437,7 +448,7 @@ int main(int f_argc, char* f_argv_p[]) {
         getHeight();
 
         // OpenMP mode
-        image::CInterpolator2DOpenMP ip2d(inImage, outImage, weightImage, 
+        image::CInterpolator2DOpenMP ip2d(inImage, weightImage, 
         ipParameters.m_bgndCol, ipParameters.m_dirCount, ipParameters.
         m_angularOffset, ipParameters.m_idwSmoothness, ipParameters.
         m_disableOC, &stdProgress);
@@ -481,8 +492,8 @@ int main(int f_argc, char* f_argv_p[]) {
             " ms (" << timingStats[3]/1000 << " s)" << std::endl;
         }
 
-        // save output image, use same type as input
-        writeOutputImage(outImage, inImage.getOrigSampleType(), inImage.
+        // save interpolated image, use same type as original input
+        writeOutputImage(inImage, inImage.getOrigSampleType(), inImage.
         getOrigBpc(), ipParameters.m_outputImageUri);
 
     } catch (const common::CException& e) {

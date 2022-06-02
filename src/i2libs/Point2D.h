@@ -256,7 +256,7 @@ namespace data {
          * Multiply multiplies the 2-space vector with the
          * given vector element-by-element.
          *
-         * @param f_factor the factor to be multiplied
+         * @param f_rhs the factor to be multiplied
          * @return the scaled vector
          */
         _CPoint2D multiply(const _CPoint2D& f_rhs) const {
@@ -335,7 +335,7 @@ namespace data {
          * point passed. Less means that the y coordinate needs to be less
          * first, and if it is equal, the x coordinate decides.
          *
-         * @param f_p the point to be hashed
+         * @param f_rhs the point to be hashed
          */
         bool operator<(const _CPoint2D& f_rhs) const {
 

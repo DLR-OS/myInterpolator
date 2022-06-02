@@ -403,12 +403,15 @@ namespace image {
          * @param f_virtualImage the virtual image, normally be a CImage
          * instance built by the default constructor (if not it will get
          * destroyed first)
+         * @param f_width the width of the virtual image
+         * @param f_height the height of the virtual image
+         * @param f_ch the channel count of the virtual image
          * @param f_offsetX the horizontal offset of the virtual image 
          * inside the underlying image
          * @param f_offsetY the vertical offset of the virtual image 
          * inside the underlying image
-         * @param f_width the width of the virtual image
-         * @param f_height the height of the virtual image
+         * @param f_offsetCh the color channel offset of the virtual image 
+         * inside the underlying image
          */
         void makeVirtualImage(CImage& f_virtualImage, data::pos_type 
         f_width, data::pos_type f_height, data::pos_type f_ch, 
@@ -1006,8 +1009,13 @@ namespace image {
         }
 
 
-        // extension is given automatically, file name does not
-        // have to contain one
+        /**
+         * WriteTiff writes the image as a TIFF bitmap.
+         *
+         * @tparam OutType the sample data type to be used
+         * @param f_fileName the filename of the destination bitmap
+         *
+         */
         template<typename OutType=SampleType>
         void writeTiff(std::string f_fileName) {   
 
@@ -1256,11 +1264,14 @@ namespace image {
 
 
         /**
-         * GetIterator returns a read-only iterator to the first pixel of 
-         * the virtual image.
+         * GetIterator returns a read-only iterator to the pixel of the 
+         * virtual image given by its coordinates.
          *
-         * @param f_p the initial position where the iterator is to be 
-         * placed on
+         * @param f_x the initial horizontal position where the iterator is 
+         * to be placed at
+         * @param f_y the initial vertical position where the iterator is 
+         * to be placed at
+         * @param f_ch the color channel to place the iterator at
          */
         const Iterator getIterator(const data::pos_type f_x=0, const data::pos_type 
         f_y=0, const data::pos_type f_ch=0) const {
@@ -1313,6 +1324,7 @@ namespace image {
          *
          * @param f_p the initial position where the iterator is to be 
          * placed on
+         * @param f_ch the initial color channel
          */
         const Iterator getIterator(const data::CPoint2DInt& f_p, const data::
         pos_type f_ch=0) const {
@@ -1326,6 +1338,7 @@ namespace image {
          *
          * @param f_p the initial position where the iterator is to be 
          * placed on
+         * @param f_ch the initial color channel
          */
         Iterator getIterator(const data::CPoint2DInt& f_p, const data::
         pos_type f_ch=0) {
@@ -1455,6 +1468,7 @@ namespace image {
          * IncCh increments the channel of the iterator by the given number.
          *
          * @param f_it the iterator the channel is to be incremented for
+         * @param f_add the increment value
          */
         void incCh(Iterator& f_it, const data::pos_type f_add) const {
             f_it+=f_add;
@@ -1465,6 +1479,7 @@ namespace image {
          * DecCh decrements the channel of the iterator by the given number.
          *
          * @param f_it the iterator the channel is to be decremented for
+         * @param f_sub the decrement value
          */
         void decCh(Iterator& f_it, const data::pos_type f_sub) const {
             f_it-=f_sub;

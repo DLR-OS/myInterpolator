@@ -23,10 +23,32 @@
 /****************************************************************************/
 
 
-void image::CPostprocess::filterGauss(const image::CFloatImage& 
-f_srcImage, image::CFloatImage& f_maskImage, image::CFloatImage& f_destImage,
-const data::CPoint2DInt& f_filterSize, common::CProgress* const 
-f_progress_p) {
+void image::CPostprocess::makeBinaryBitMask(const CFloatImage& f_fpMask, 
+CU8Image& f_bitMask) {
+
+    // create bit mask image
+    f_bitMask.create(common::max2<data::pos_type>(1, f_fpMask.getWidth()/8), 
+    f_fpMask.getHeight(), 1, 0);
+
+    // fill bits    
+    for (data::pos_type y=0; y<f_fpMask.getHeight(); ++y) {
+        for (data::pos_type x=0; x<f_fpMask.getWidth(); ++x) {
+
+            const uint8_t pixelMask=*(f_fpMask.getIterator(x, y, 0))>0.0f ?
+            (1<<(x%8)): 0;
+            
+            *(f_bitMask.getIterator(x/8, y, 0))|=pixelMask;
+        }
+    }
+}
+
+
+/****************************************************************************/
+
+
+void image::CPostprocess::filterGauss(CFloatImage& f_srcDestImage, 
+const CU8Image& f_bitMaskImage, CFloatImage& f_tempImage, const data::
+CPoint2DInt& f_filterSize, common::CProgress* const f_progress_p) {
 
     // guarantee odd filters
     const data::CPoint2DInt oddFilterSize(
@@ -41,89 +63,94 @@ f_progress_p) {
     );
 
     #pragma omp parallel for schedule (dynamic)
-    for (data::pos_type y=0; y<f_srcImage.getHeight(); ++y) {
+    for (data::pos_type y=0; y<f_srcDestImage.getHeight(); ++y) {
 
         if (f_progress_p) {
             
             #pragma omp critical
             {
                 const double percentage=static_cast<double>(y+1)/
-                f_maskImage.getHeight();
+                f_srcDestImage.getHeight();
 
                 f_progress_p->setPercentage(percentage);
                 f_progress_p->showProgress();
             }
         }
 
-        for (data::pos_type x=0; x<f_srcImage.getWidth(); ++x) {    
+        for (data::pos_type x=0; x<f_srcDestImage.getWidth(); ++x) {    
 
             // pixel to be filtered, kernel center
             const data::CPoint2DInt centerPos(x, y);
 
-            // interpolated pixel ?
-            if (*f_maskImage.getIterator(centerPos, 0)<0) {
-                // no, plain copy
+            // filter interpolated pixels only from fully h-filtered
+            // temporary image - implictly keep non-interpolated pixels
+            const uint8_t mustFilter=*(f_bitMaskImage.getIterator(
+            x/8, y, 0)) & (1 << (x%8));
 
-                for (data::pos_type ch=0; ch<f_srcImage.getNrOfChannels(); 
-                ++ch) {
-                    *(f_destImage.getIterator(centerPos, ch))=
-                    *(f_srcImage.getIterator(centerPos, ch));
-                }
-
-            } else {
-                // yes, filter
+            if (mustFilter) {
 
                 data::CPoint2DInt kernelPos;
                 float outSample=0;
                 float weightSum=0;
 
                 // init output pixel for accumulation
-                float* destIt=f_destImage.getIterator(centerPos, 0);
-                for (data::pos_type ch=0; ch<f_destImage.getNrOfChannels(); 
-                ++ch, ++destIt) {
-                    *destIt=0;
+                float* tempIt=f_tempImage.getIterator(centerPos, 0);
+                for (data::pos_type ch=0; ch<f_tempImage.getNrOfChannels(); 
+                ++ch, ++tempIt) {
+                    *tempIt=0;
                 }
-                destIt-=f_destImage.getNrOfChannels();
+                tempIt-=f_tempImage.getNrOfChannels();
 
                 for (data::pos_type ky=-halfKs.m_j; ky<=halfKs.m_j; ++ky) {
                     
-                    kernelPos.m_j=common::period(ky+y, f_srcImage.
+                    kernelPos.m_j=common::period(ky+y, f_srcDestImage.
                     getHeight());
 
                     for (data::pos_type kx=-halfKs.m_i; kx<=halfKs.m_i; 
                     ++kx) {
 
-                        kernelPos.m_i=common::period(kx+x, f_srcImage.
+                        kernelPos.m_i=common::period(kx+x, f_srcDestImage.
                         getWidth());
 
-                        float* srcIt=f_srcImage.getIterator(kernelPos, 0);
+                        float* srcIt=f_srcDestImage.getIterator(kernelPos, 0);
                         const float weight=common::gaussianDistribution(kx, 0, 
                         oddFilterSize.m_i/3)*common::gaussianDistribution(ky, 0, 
                         oddFilterSize.m_j/3);
                         weightSum+=weight;                        
                         
-                        for (data::pos_type ch=0; ch<f_srcImage.
-                        getNrOfChannels(); ++ch, ++destIt, ++srcIt) {
-                            const float* srcIt=f_srcImage.getIterator(
+                        for (data::pos_type ch=0; ch<f_srcDestImage.
+                        getNrOfChannels(); ++ch, ++tempIt, ++srcIt) {
+                            const float* srcIt=f_srcDestImage.getIterator(
                             kernelPos, ch);
-                            *destIt+=*srcIt*weight;
+                            *tempIt+=*srcIt*weight;
                         }   
 
-                        srcIt-=f_srcImage.getNrOfChannels();                     
-                        destIt-=f_destImage.getNrOfChannels();                     
+                        srcIt-=f_srcDestImage.getNrOfChannels();                     
+                        tempIt-=f_tempImage.getNrOfChannels();                     
                     } // kx
                 } // ky
 
                 // normalize                
-                for (data::pos_type ch=0; ch<f_destImage.
-                getNrOfChannels(); ++ch, ++destIt) {                            
-                    *destIt/=(fabs(weightSum)>0) ? weightSum : 1;
+                for (data::pos_type ch=0; ch<f_tempImage.
+                getNrOfChannels(); ++ch, ++tempIt) {                            
+                    *tempIt/=(fabs(weightSum)>0) ? weightSum : 1;
                 }
-                destIt-=f_destImage.getNrOfChannels();
+                tempIt-=f_tempImage.getNrOfChannels();
+            } else {
+
+                // do not filter, plain copy
+                for (data::pos_type ch=0; ch<f_srcDestImage.getNrOfChannels(); 
+                ++ch) {
+                    *(f_tempImage.getIterator(centerPos, ch))=
+                    *(f_srcDestImage.getIterator(centerPos, ch));
+                } 
 
             } // mustFilter
         } // x
     } // y
+
+    // copy result back to input image
+    f_srcDestImage=f_tempImage;
 }
 
 
@@ -136,12 +163,12 @@ f_progress_p) {
 // 2. filter the temp image vertically keeping the non-interpolated points
 //
 // to get the equivalent of a genuine 2D convolution on the interpolated
-// pixels
+// pixels. Due to a separate binary bitmask, filtering can take placed in 
+// an interleaved fashion and does not have to be run band-wise.
 //
 void image::CPostprocess::filterGaussSep(image::CFloatImage& f_srcDestImage, 
-image::CFloatImage& f_maskImage, image::CFloatImage& f_tempImage, 
-const data::CPoint2DInt& f_filterSize, common::CProgress* const 
-f_progress_p) {
+const image::CU8Image& f_bitMaskImage, image::CFloatImage& f_tempImage, const
+data::CPoint2DInt& f_filterSize, common::CProgress* const f_progress_p) {
 
     const data::CPoint2DInt oddFilterSize(
         f_filterSize.m_i % 2 ? f_filterSize.m_i : f_filterSize.m_i+1,
@@ -177,7 +204,7 @@ f_progress_p) {
             #pragma omp critical
             {
                 // horizontal filter is only half of the cake
-                const double percentage=0.5*(y+1)/f_maskImage.getHeight();
+                const double percentage=0.5*(y+1)/f_srcDestImage.getHeight();
 
                 if (f_progress_p->getPercentage()<percentage) {
                     f_progress_p->setPercentage(percentage);
@@ -218,7 +245,8 @@ f_progress_p) {
 
     //
     // vertical pass (tempImage -> srcDestImage)
-    // now filter selectively the interpolated pixels only
+    // now filter selectively the pixels only that have a set bit inside
+    // trhe binary bit mask
     //    
 
     // precompute vertical kernel and its normalization factor
@@ -242,7 +270,7 @@ f_progress_p) {
             #pragma omp critical
             {
                 // vertical filter is other half of the cake
-                const double percentage=0.5+(0.5*(x+1)/f_maskImage.
+                const double percentage=0.5+(0.5*(x+1)/f_srcDestImage.
                 getWidth());
 
                 if (f_progress_p->getPercentage()<percentage) {
@@ -258,7 +286,10 @@ f_progress_p) {
 
             // filter interpolated pixels only from fully h-filtered
             // temporary image - implictly keep non-interpolated pixels
-            if (*f_maskImage.getIterator(x, y, 0)>0) {
+            const uint8_t mustFilter=*(f_bitMaskImage.getIterator(
+            x/8, y, 0)) & (1 << (x%8));
+
+            if (mustFilter) {
 
                 // initialize target pixel for aggregation
                 for (data::pos_type ch=0; ch<f_tempImage.getNrOfChannels(); 
@@ -281,7 +312,6 @@ f_progress_p) {
 
                     destIt-=f_srcDestImage.getNrOfChannels();
                 }
-
             } // filter
         } // x
     } // y

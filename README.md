@@ -4,6 +4,11 @@ MyInterpolator fills voids in images from surrounding pixels using an approximat
 
 Frommholz, D.: *IMAGE INTERPOLATION ON THE CPU AND GPU USING LINE RUN  SEQUENCES*, ISPRS Ann. Photogramm. Remote Sens. Spatial Inf. Sci.,  V-2-2022, 53–60, https://doi.org/10.5194/isprs-annals-V-2-2022-53-2022,  2022.    
 
+Since the publication of the paper, the following improvements have been incorporated into the source code:
+
+- Interpolation is now "in-place" discarding the dedicated output image. This improvement reduces the memory footprint to ~66% of the original implementation. When postprocessing (Gaussian smoothing with a separable filter) gets activated, a small memory overhead incurs which however will always be much less (< 1/32) than the amount of RAM previously occupied by the dedicated output bitmap. Runtime also decreases by ~10 ... 20% due to simplifications in path tracing.
+
+
 ## 1. License
 
 MyInterpolator is Copyright (C) 2022  Dirk 'jtk' Frommholz, [DLR OS-SEC](https://www.dlr.de/os/en/desktopdefault.aspx/).

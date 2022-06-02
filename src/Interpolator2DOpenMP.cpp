@@ -27,14 +27,13 @@
 
 
 image::CInterpolator2DOpenMP::CInterpolator2DOpenMP(CFloatImage& 
-f_inImage, CFloatImage& f_outImage, CFloatImage& f_weightImage, const 
-std::vector<float>& f_bgnd, const data::pos_type f_dirCount, const float 
-f_angularOffset, const float f_idwSmoothness, const bool f_disableOC, 
-common::CProgress* const f_progress_p):
-m_inImage(f_inImage), m_outImage(f_outImage), m_idwSmoothness(
-f_idwSmoothness), m_weightImage(f_weightImage), m_dirCount(f_dirCount), 
-m_angularOffset(f_angularOffset), m_bgnd(f_bgnd), m_disableOC(f_disableOC), 
-m_progress_p(f_progress_p) {
+f_inImage, CFloatImage& f_weightImage, const std::vector<float>& f_bgnd, 
+const data::pos_type f_dirCount, const float f_angularOffset, const float 
+f_idwSmoothness, const bool f_disableOC, common::CProgress* const 
+f_progress_p):
+m_inImage(f_inImage), m_idwSmoothness(f_idwSmoothness), m_weightImage(
+f_weightImage), m_dirCount(f_dirCount), m_angularOffset(f_angularOffset), 
+m_bgnd(f_bgnd), m_disableOC(f_disableOC), m_progress_p(f_progress_p) {
 }
 
 
@@ -146,15 +145,14 @@ void image::CInterpolator2DOpenMP::sweepArbDirectionReplay(
     const data::CPoint2DInt* f_pathRuns_p,
     const data::pos_type f_skipRuns,
     // imagery
-    const float* f_inImage_p,
+    float* f_inImage_p,
     float* f_weightImage_p,
-    float* f_outImage_p,
     const uint64_t f_width,
     const uint64_t f_height,
     const uint64_t f_nrOfChannels
 ) {
 
-    // acttual start pixel index, must start at f_skipRuns=1 on 
+    // actual start pixel index, must start at f_skipRuns=1 on 
     // secondary sweeps to avoid overlaps
     const uint64_t spIndex=f_spIndex+f_skipRuns;
 
@@ -162,26 +160,35 @@ void image::CInterpolator2DOpenMP::sweepArbDirectionReplay(
     // negative if we havn't seen a fgnd pixel yet
     float distanceToCurPixel=-1;
 
+    //
     // init Bresenham variables
+    //
+
+    // f_startPixels must be outside the image frame when
+    // f_skipRuns=1 (secondary sweeps) for the sucessor of the maximum
+    // valid run index from the primary sweep !!!                          
     data::CPoint2DInt linePos(f_startPixels_p[spIndex]);
 
     // current run
     // we skip the first spIndex runs (only if f_skipRuns is 1
     // for the secondary sweeps)
+    // this may end up outside the range of valid runs from the
+    // primary sweep by 1 on secondary sweeps, but since in this
+    // case - as stated above - we'll be outside the image frame
+    // no harm will be done
     const data::CPoint2DInt* runIt=f_pathRuns_p+f_skipRuns*spIndex;
 
     // the length of the current run
     data::pos_type runLength=runIt->m_j;
 
     // initialize image pointers
-    const data::pos_type pixelOffset=(linePos.m_j*f_width+linePos.m_i)*f_nrOfChannels;
+    const data::pos_type pixelOffset=(linePos.m_j*f_width+linePos.m_i)*
+    f_nrOfChannels;
 
     // current input image position (channel #0)
-    const float* inImagePtr_p=f_inImage_p+pixelOffset;
+    float* inImagePtr_p=f_inImage_p+pixelOffset;
     // current weight image position (channel #0)
     float* weightImagePtr_p=f_weightImage_p+pixelOffset;
-    // current output image position (channel #0)
-    float* outImagePtr_p=f_outImage_p+pixelOffset;
     // last foreground pixel (channel #0)
     const float* lastFgndPtr_p=0;
 
@@ -224,29 +231,17 @@ void image::CInterpolator2DOpenMP::sweepArbDirectionReplay(
 
                 // interpolate
                 for (uint64_t ch=0; ch<f_nrOfChannels; ++ch, 
-                ++inImagePtr_p, ++weightImagePtr_p, ++outImagePtr_p, 
-                ++lastFgndPtr_p) {
-                    *outImagePtr_p+=*lastFgndPtr_p*weight;
+                ++inImagePtr_p, ++weightImagePtr_p, ++lastFgndPtr_p) {
+                    *inImagePtr_p+=*lastFgndPtr_p*weight;
                     *weightImagePtr_p+=weight;
                 }                
 
                 // reset to channel #0
                 inImagePtr_p-=f_nrOfChannels;
                 weightImagePtr_p-=f_nrOfChannels;
-                outImagePtr_p-=f_nrOfChannels;
                 lastFgndPtr_p-=f_nrOfChannels;
             }
         } else {
-
-            // copy input to output without changes
-            for (uint64_t ch=0; ch<f_nrOfChannels; ++ch, ++inImagePtr_p, 
-            ++outImagePtr_p) {
-                *outImagePtr_p=*inImagePtr_p;
-            }
-
-            // reset to channel #0
-            inImagePtr_p-=f_nrOfChannels;
-            outImagePtr_p-=f_nrOfChannels;
 
             // fgnd -> remember as the last neighbor seen 
             lastFgndPtr_p=inImagePtr_p;
@@ -263,7 +258,6 @@ void image::CInterpolator2DOpenMP::sweepArbDirectionReplay(
             // update image pointers
             inImagePtr_p+=prefAndNonPrefDirPixelUpdate;
             weightImagePtr_p+=prefAndNonPrefDirPixelUpdate;
-            outImagePtr_p+=prefAndNonPrefDirPixelUpdate;
 
             // re-initialize run length from next run
             ++runIt;
@@ -277,7 +271,6 @@ void image::CInterpolator2DOpenMP::sweepArbDirectionReplay(
             // update image pointers
             inImagePtr_p+=prefOnlyPixelUpdate;
             weightImagePtr_p+=prefOnlyPixelUpdate;
-            outImagePtr_p+=prefOnlyPixelUpdate;
         }
     } // whileInImageAndHaveRunsLeft
 }
@@ -347,9 +340,8 @@ bool f_forward) {
                 x, f_startPixels.data(), f_prefAndNonPrefDirStep, 
                 f_prefDirOnlyStep, f_distanceInc, f_idwSmoothness, 
                 f_pathRuns.data(), 0, m_inImage.getIterator(), 
-                m_weightImage.getIterator(), m_outImage.getIterator(), 
-                m_inImage.getWidth(), m_inImage.getHeight(), 
-                m_inImage.getNrOfChannels());
+                m_weightImage.getIterator(), m_inImage.getWidth(), 
+                m_inImage.getHeight(), m_inImage.getNrOfChannels());
             }
 
             return runCount;
@@ -382,9 +374,8 @@ bool f_forward) {
                 f_startPixels.data(), f_prefAndNonPrefDirStep, 
                 f_prefDirOnlyStep, f_distanceInc, f_idwSmoothness,  
                 f_pathRuns.data(), 0, m_inImage.getIterator(), 
-                m_weightImage.getIterator(), m_outImage.getIterator(),
-                m_inImage.getWidth(), m_inImage.getHeight(), 
-                m_inImage.getNrOfChannels());                
+                m_weightImage.getIterator(), m_inImage.getWidth(), 
+                m_inImage.getHeight(), m_inImage.getNrOfChannels());                
             }
 
             return runCount;
@@ -423,9 +414,8 @@ bool f_forward) {
                 f_startPixels.data(), f_prefAndNonPrefDirStep, 
                 f_prefDirOnlyStep, f_distanceInc, f_idwSmoothness, 
                 f_pathRuns.data(), 0, m_inImage.getIterator(), m_weightImage.
-                getIterator(), m_outImage.getIterator(), m_inImage.
-                getWidth(), m_inImage.getHeight(), m_inImage.
-                getNrOfChannels());
+                getIterator(), m_inImage.getWidth(), m_inImage.getHeight(), 
+                m_inImage.getNrOfChannels());
             }
 
             return runCount;
@@ -456,9 +446,8 @@ bool f_forward) {
                 f_startPixels.data(), f_prefAndNonPrefDirStep, 
                 f_prefDirOnlyStep, f_distanceInc, f_idwSmoothness, 
                 f_pathRuns.data(), 0, m_inImage.getIterator(), m_weightImage.
-                getIterator(), m_outImage.getIterator(), m_inImage.
-                getWidth(), m_inImage.getHeight(), m_inImage.
-                getNrOfChannels());
+                getIterator(), m_inImage.getWidth(), m_inImage.getHeight(), 
+                m_inImage.getNrOfChannels());
             }
 
             return runCount;
@@ -484,6 +473,11 @@ f_idwSmoothness, const std::vector<data::CPoint2DInt>& f_pathRuns, const
 data::pos_type f_runCount, std::vector<data::CPoint2DInt>& f_startPixels, 
 bool f_forward) {
 
+    // set the start position at the runCount index to something 
+    // outside the image as a stop mark or the run pointer inside
+    // sweepArbDirectionReplay() may become invalid            
+    f_startPixels[f_runCount].setCoords(-1, -1);
+
     // start path cost aggregation from top/bottom border ?
     if ((f_sweepMode & SWEEP_STARTS_TOP_ROW) || (f_sweepMode & 
     SWEEP_STARTS_BOTTOM_ROW)) {
@@ -491,31 +485,33 @@ bool f_forward) {
         if (f_forward) {            
 
             // precompute start pixels
+            // start at run #0 since we offset the actual start run for the
+            // secondary sweep inside sweepArbDirectionReplay()
             #pragma omp parallel for
             for (data::pos_type runNo=0; runNo<f_runCount; ++runNo) { 
                 f_startPixels[runNo].setCoords(f_pathRuns[runNo].m_i, 
                 (f_sweepMode & SWEEP_STARTS_TOP_ROW) ? 0 : m_inImage.
                 getHeight()-1);
-            }
+            }            
 
-            // start with first line run since run #0 has been set
-            // already during primary sweep, enable run skipping 
+            // start with zero-th line run since the actual start run
+            // will be computed inside sweepArbDirectionReplay() to skip
+            // those pixels touched by the primary sweep, enable run skipping
             #pragma omp parallel for schedule(dynamic)
             for (data::pos_type runNo=0; runNo<f_runCount; ++runNo) { 
                 sweepArbDirectionReplay(m_disableOC ? 0 : m_dirCount, runNo, 
                 f_startPixels.data(), f_prefAndNonPrefDirStep, 
                 f_prefDirOnlyStep, f_distanceInc, f_idwSmoothness, 
                 f_pathRuns.data(), 1, m_inImage.getIterator(), m_weightImage.
-                getIterator(), m_outImage.getIterator(), m_inImage.
-                getWidth(), m_inImage.getHeight(), m_inImage.
-                getNrOfChannels());
+                getIterator(), m_inImage.getWidth(), m_inImage.getHeight(), 
+                m_inImage.getNrOfChannels());
             }
 
         } else {
 
             // reverse order, r->l
 
-            // precompute start pixels
+            // precompute start pixels, similar procedure
             #pragma omp parallel for
             for (data::pos_type runNo=0; runNo<f_runCount; ++runNo) { 
 
@@ -530,9 +526,8 @@ bool f_forward) {
                 f_startPixels.data(), f_prefAndNonPrefDirStep, 
                 f_prefDirOnlyStep, f_distanceInc, f_idwSmoothness, 
                 f_pathRuns.data(), 1, m_inImage.getIterator(), m_weightImage.
-                getIterator(), m_outImage.getIterator(), m_inImage.
-                getWidth(), m_inImage.getHeight(), m_inImage.
-                getNrOfChannels());
+                getIterator(), m_inImage.getWidth(), m_inImage.getHeight(), 
+                m_inImage.getNrOfChannels());
             }
         }
     } // top/bottom border
@@ -558,9 +553,8 @@ bool f_forward) {
                 f_startPixels.data(), f_prefAndNonPrefDirStep, 
                 f_prefDirOnlyStep, f_distanceInc, f_idwSmoothness, 
                 f_pathRuns.data(), 1, m_inImage.getIterator(), 
-                m_weightImage.getIterator(), m_outImage.getIterator(), 
-                m_inImage.getWidth(), m_inImage.getHeight(), m_inImage.
-                getNrOfChannels());      
+                m_weightImage.getIterator(), m_inImage.getWidth(), m_inImage.
+                getHeight(), m_inImage.getNrOfChannels());      
             }
 
         } else {
@@ -582,8 +576,8 @@ bool f_forward) {
                 f_startPixels.data(), f_prefAndNonPrefDirStep, 
                 f_prefDirOnlyStep, f_distanceInc, f_idwSmoothness, f_pathRuns.
                 data(), 1, m_inImage.getIterator(), m_weightImage.getIterator(), 
-                m_outImage.getIterator(), m_inImage.getWidth(), m_inImage.
-                getHeight(), m_inImage.getNrOfChannels());      
+                m_inImage.getWidth(), m_inImage.getHeight(), 
+                m_inImage.getNrOfChannels());      
             }
         } 
     } // left/right border
@@ -890,9 +884,8 @@ data::CPoint3DInt image::CInterpolator2DOpenMP::normalize() {
     for (data::pos_type y=0; y<m_weightImage.getHeight(); ++y) {
 
         // initialize per-thread iterator set 
-        const float* inIt=m_inImage.getIterator(0, y, 0);
+        float* inIt=m_inImage.getIterator(0, y, 0);
         const float* weightIt=m_weightImage.getIterator(0, y, 0);    
-        float* outIt=m_outImage.getIterator(0, y, 0);
         data::CPoint3DInt  localPointStats;
 
         if (m_progress_p) {
@@ -909,7 +902,7 @@ data::CPoint3DInt image::CInterpolator2DOpenMP::normalize() {
 
         for (data::pos_type x=0; x<m_weightImage.getWidth(); ++x) {
             for (data::pos_type ch=0; ch<m_weightImage.getNrOfChannels(); 
-            ++ch, ++inIt, ++outIt, ++weightIt) {
+            ++ch, ++inIt, ++weightIt) {
 
                 // we don't need to normalize non-bgnd pixels, and for
                 // the fgnd/bgnd check, we abuse the weight image
@@ -917,18 +910,18 @@ data::CPoint3DInt image::CInterpolator2DOpenMP::normalize() {
 
                     // interpolated bgnd pixel ?
                     if (*weightIt==0.0f) {
-                        // no, plain copy
-                        *outIt=m_bgnd[ch];    
+                        // no, plain copy of bgnd color
+                        *inIt=m_bgnd[ch];    
                         ++localPointStats.m_y;
                     } else {
                         // yes, normalize
-                        *outIt/=(*weightIt); 
+                        *inIt/=(*weightIt); 
                         ++localPointStats.m_z;
                     }
                     
                 } else {
-                    // fgnd pixel, copy
-                    *outIt=*inIt;
+                    // fgnd pixel, preserve input (=do nothing but alter 
+                    // statistics)
                     ++localPointStats.m_x;
                 }
             }    
@@ -946,7 +939,7 @@ data::CPoint3DInt image::CInterpolator2DOpenMP::normalize() {
 /****************************************************************************/
 
 
-void image::CInterpolator2DOpenMP::initWeightImage() {
+void image::CInterpolator2DOpenMP::prepareAggregation() {
     
     #pragma omp parallel for schedule(dynamic)
     for (data::pos_type y=0; y<m_weightImage.getHeight(); ++y) {
@@ -958,10 +951,16 @@ void image::CInterpolator2DOpenMP::initWeightImage() {
             const CFloatImage::SampleType initialWeight=pixelIsBgnd(pos) ? 
             0 : -10;
 
+            CFloatImage::Iterator inIt=m_inImage.getIterator(pos, 0);
             CFloatImage::Iterator weightIt=m_weightImage.getIterator(pos, 0);
+
             for (data::pos_type ch=0; ch<m_weightImage.getNrOfChannels(); 
-            ++ch, ++weightIt) {                
-                *weightIt=initialWeight;
+            ++ch, ++weightIt, ++inIt) {                
+                // invalid (bgnd) pixels must be zero in the input bitmap
+                // for the in-place aggregation
+                *inIt=(initialWeight>-1) ? 0 : *inIt;
+                // valid pixels will be negative in the weight bitmap
+                *weightIt=initialWeight;                
             } // ch
         } // x
     } // y
@@ -977,7 +976,7 @@ f_timingStats_p) {
 
     // init weight image to accelerate bgnd check
     auto startTime=std::chrono::system_clock::now();    
-    initWeightImage();
+    prepareAggregation();
     if (f_timingStats_p) {
         f_timingStats_p->clear();
 
@@ -994,7 +993,7 @@ f_timingStats_p) {
     }
 
     // intensity normalization
-    startTime=std::chrono::system_clock::now();    
+    startTime=std::chrono::system_clock::now(); 
     const data::CPoint3DInt pointStats=normalize();  
 
     if (f_pointStats_p) {
@@ -1006,35 +1005,42 @@ f_timingStats_p) {
         milliseconds>(std::chrono::system_clock::now()-startTime).count());
     }
     
-    CPostprocess pp;
-
-    // postprocessing (classic 2D convolution)   
-    //if (f_ppFilterSize.m_i>0) {
-
-    //    m_progress_p->init("Postprocessing");
-    //    startTime=std::chrono::system_clock::now();    
-    //    pp.filterGauss(m_outImage, m_weightImage, m_inImage, f_ppFilterSize, 
-    //    m_progress_p);
-    //    m_outImage=m_inImage;
-
-    //    if (f_timingStats_p) {
-    //        f_timingStats_p->push_back(std::chrono::duration_cast<std::
-    //        chrono::milliseconds>(std::chrono::system_clock::now()-startTime).
-    //        count());
-    //    }
-    //}
-
-    // postprocessing (separable filter)   
+    // postprocessing aka smoothing
     if (f_ppFilterSize.m_i>0) {
+
+        CPostprocess pp;
+
+        // prepare binary bit mask for pixels that have been interpolated
+        // since the weight image will be recycled as a temp image and get 
+        // overwritten
+        CU8Image maskImage;
+        pp.makeBinaryBitMask(m_weightImage, maskImage);
+
+        // run Gauss (classic convolution, slow)
+        //m_progress_p->init("Postprocessing");
+        //startTime=std::chrono::system_clock::now();    
+        //pp.filterGauss(m_inImage, maskImage, m_weightImage, f_ppFilterSize, 
+        //m_progress_p);
+
+        //if (f_timingStats_p) {
+        //    f_timingStats_p->push_back(std::chrono::duration_cast<std::
+        //    chrono::milliseconds>(std::chrono::system_clock::now()-startTime).
+        //    count());
+        //}
+
+        // run Gauss (separable)
         m_progress_p->init("Postprocessing (separable filter)");
         startTime=std::chrono::system_clock::now();    
-        pp.filterGaussSep(m_outImage, m_weightImage, m_inImage, f_ppFilterSize, 
-        m_progress_p);
+
+        // inImage is src/dest image, take weight image of the same 
+        // characteristics as temp image
+        pp.filterGaussSep(m_inImage, maskImage, m_weightImage, 
+        f_ppFilterSize, m_progress_p);
 
         if (f_timingStats_p) {
             f_timingStats_p->push_back(std::chrono::duration_cast<std::
-            chrono::milliseconds>(std::chrono::system_clock::now()-startTime).
-            count());
+            chrono::milliseconds>(std::chrono::system_clock::now()-
+            startTime).count());
         }
     }
 }

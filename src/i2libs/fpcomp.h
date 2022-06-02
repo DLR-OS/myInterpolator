@@ -43,10 +43,24 @@ namespace common {
     class CFpCompTrait {
         public:
 
+
+            /**
+             * GetFpCompAbsoluteError returns the absolute error to be used
+             * for the comparison of floating-point numbers.
+             *
+             * @return the absolute error
+             */
             static const T getFpCompAbsoluteError() {
                 return static_cast<T>(0.000001);
             }
 
+
+            /**
+             * GetFpCompRelativeError returns the relative error to be used
+             * for the comparison of floating-point numbers.
+             *
+             * @return the relative error
+             */
             static const T getFpCompRelativeError() {
                 return static_cast<T>(0.000001);
             }
@@ -58,16 +72,30 @@ namespace common {
 
     /**
      * CFpCompTrait<double> is a more accurate specialization of
-     * CFpCompTrait.
+     * CFpCompTrait for double-precision floating-point numbers.
      */
     template <> 
     class CFpCompTrait<double> {
         public:
 
+
+            /**
+             * GetFpCompAbsoluteError returns the absolute error to be used
+             * for the comparison of double-precision floating-point numbers.
+             *
+             * @return the absolute error
+             */
             static const double getFpCompAbsoluteError() {
                 return 0.00000001;
             }
 
+
+            /**
+             * GetFpCompRelativeError returns the relative error to be used
+             * for the comparison of double-precision floating-point numbers.
+             *
+             * @return the relative error
+             */
             static const double getFpCompRelativeError() {
                 return 0.00000001;
             }
