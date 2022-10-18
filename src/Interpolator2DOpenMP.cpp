@@ -96,14 +96,18 @@ CoordType f_length, std::vector<data::CPoint2DInt>& f_runs) {
             curRunIsFinished=(curRunIsFinished==false) ? (dx>-dy) : true;
         } 
 
-        // must start new run ?
+        // current run is finished, i.e., step in minor line direction ?
         if (curRunIsFinished) {
             startOfCurrentRun+=runIt->m_j;
 
-            ++runIt;
-            runIt->m_i=startOfCurrentRun;
-            runIt->m_j=0;
-            ++nrOfRuns;
+            // must start new run ? do so only if some length is left
+            if (f_length>0) {
+
+                ++runIt;
+                runIt->m_i=startOfCurrentRun;
+                runIt->m_j=0;
+                ++nrOfRuns;
+            }
         }
 
     } // while
